@@ -1,52 +1,82 @@
 module Api
-    module v1
-        class AirlinesController < ApplicationController
+  module V1
+    class AirlinesController < ApiController
+      before_action :authenticate, only: %i[create update destroy]
 
-            def index
-                airlines = Airline.all
-                render json: AirlineSerializer.new(airlines, options).serialized_json
-            end
+      # GET /api/v1/airlines
+      def index
+        render json: serializer(airlines, options)
+      end
+      
+      # GET /api/v1/airlines/:slug
+      def show
+        render json: serializer(airline, options)
+      end
 
-            def show
-                airline = Airline.find_by(slug: param[:slug])
-                render json: AirlineSerializer.new(airline, options).serialized_json
-            end
+      # POST /api/v1/airlines
+      def create
+        airline = Airline.new(airline_params)
 
-            def create
-                airline = Airline.new(airline_params)
-                if airline.save
-                    render json: AirlineSerializer.new(airline).serialized_json
-                else
-                    render json: {error: airline.errors.messages}, status: 422
-                end  
-            end
-
-            def update
-                airline = Airline.find_by(slug: param[:slug])
-                if airline.update(airline_params)
-                    render json: AirlineSerializer.new(airline, options).serialized_json
-                else
-                    render json: {error: airline.errors.messages}, status: 422
-                end  
-            end
-
-            def destroy
-                airline = Airline.find_by(slug: param[:slug])
-                if airline.destroy
-                    head: no_content
-                else
-                    render json: {error: airline.errors.messages}, status: 422
-                end  
-            end
-
-            private
-
-            def airline_params
-                params.require(:airline).permit(:name, :image_url)
-            end
-            def options
-                @options ||= {include: %i[reviews]}
-            end
+        if airline.save
+          render json: serializer(airline)
+        else
+          render json: errors(airline), status: 422
         end
+      end
+
+      # PATCH /api/v1/airlines/:slug
+      def update
+        airline = Airline.find_by(slug: params[:slug])
+
+        if airline.update(airline_params)
+          render json: serializer(airline, options)
+        else
+          render json: errors(airline), status: 422
+        end
+      end
+
+      # DELETE /api/v1/airlines/:slug
+      def destroy
+        if airline.destroy
+          head :no_content
+        else
+          render json: errors(airline), status: 422
+        end
+      end
+
+      private
+
+      # Used For compound documents with fast_jsonapi
+      def options
+        @options ||= { include: %i[reviews] }
+      end
+
+      # Get all airlines
+      def airlines
+        @airlines ||= Airline.includes(reviews: :user).all
+      end
+
+      # Get a specific airline
+      def airline
+        @airline ||= Airline.includes(reviews: :user).find_by(slug: params[:slug])
+      end
+
+      # Strong params
+      def airline_params
+        params.require(:airline).permit(:name, :image_url)
+      end
+
+      # fast_jsonapi serializer
+      def serializer(records, options = {})
+        AirlineSerializer
+          .new(records, options)
+          .serialized_json
+      end
+
+      # Errors
+      def errors(record)
+        { errors: record.errors.messages }
+      end
     end
+  end
 end
